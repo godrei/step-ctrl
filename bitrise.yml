@@ -1,0 +1,17 @@
+---
+format_version: '11'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+workflows:
+  sample:
+    steps:
+    - path::./:
+        inputs:
+        - trigger_token: dummy
+        - api_token: dummy
+        - app_slug: dummy
+        - repository_url: https://github.com/godrei/styrax-compose.git
+        - repository_owner: godrei
+        - stack_id: osx-xcode-13.2.x
+        - machine_type: g2.12core
+        - workflow: nesting_level_10

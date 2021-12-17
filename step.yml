@@ -1,0 +1,50 @@
+title: Controller
+summary: dummy
+description: dummy
+
+website: "https://github.com/godrei/step-ctrl.git"
+
+toolkit:
+  go:
+    package_name: github.com/godrei/step-ctrl
+
+inputs:
+- repository_url:
+  opts:
+    title: "Repository URL"
+    is_required: true
+
+- repository_owner:
+  opts:
+    title: "Repository Owner"
+    is_required: true
+
+- trigger_token:
+  opts:
+    title: "trigger token"
+    is_required: true
+
+- api_token:
+  opts:
+    title: "API token"
+    is_required: true
+
+- app_slug:
+  opts:
+    title: "App slug"
+    is_required: true
+
+- stack_id:
+  opts:
+    title: "Stack ID"
+    is_required: true
+
+- machine_type:
+  opts:
+    title: "Machine type"
+    is_required: true
+
+- workflow:
+  opts:
+    title: "Workflow"
+    is_required: true
