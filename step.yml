@@ -48,3 +48,19 @@ inputs:
   opts:
     title: "Workflow"
     is_required: true
+
+- hang_timeout:
+  opts:
+    title: "Hang timeout"
+    is_required: true
+
+- hang_webhook:
+  opts:
+    title: "Hang webhook"
+    is_required: true
+
+- hang_channel:
+  opts:
+    title: "Hang channel"
+    is_required: true
+

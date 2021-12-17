@@ -83,11 +83,11 @@ type BuildParamsEnvironment struct {
 }
 
 // ExecuteWorkflows ...
-func ExecuteWorkflows(triggerToken string, apiToken string, appSlug string, keys []Key, abortOnFailure bool) (map[string]BuildInfo, error) {
+func ExecuteWorkflows(triggerToken string, apiToken string, appSlug string, keys Key, hangingBuildWarning HangingBuildWarning) (map[string]BuildInfo, error) {
 	fmt.Println()
 	log.Infof("Trigger Workflows")
 
-	startedBuilds, err := triggerWorkflows(triggerToken, appSlug, keys)
+	startedBuild, err := triggerWorkflow(triggerToken, appSlug, keys)
 	if err != nil {
 		return nil, err
 	}
@@ -95,132 +95,108 @@ func ExecuteWorkflows(triggerToken string, apiToken string, appSlug string, keys
 	fmt.Println()
 	log.Infof("Monitoring Workflows")
 
-	buildInfos, err := monitorRunningBuilds(apiToken, startedBuilds, abortOnFailure)
+	buildInfos, err := monitorRunningBuilds(apiToken, *startedBuild, hangingBuildWarning)
 	printBuildInfos(buildInfos)
 
 	return buildInfos, err
 }
 
-func triggerWorkflows(triggerToken, appSlug string, keys []Key) ([]buildKey, error) {
-	var startedBuilds []buildKey
-	for _, k := range keys {
-		log.Printf("Starting %s", k.ID)
-		params, err := newBuildTriggerParams(k, triggerToken)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create buildparams: %s", err)
-		}
-
-		// TODO investigate issue with several commit messages, then remove
-		params.BuildParams.CommitMessage = ""
-
-		if k.RepoOwner != "" {
-			params.BuildParams.BranchRepoOwner = k.RepoOwner
-			params.BuildParams.BranchDestRepoOwner = k.RepoOwner
-		}
-
-		log.Printf("Params:\n%s", pretty.Object(params))
-
-		url := "https://app.bitrise.io/app/" + appSlug + "/build/start.json"
-
-		data, err := json.Marshal(params)
-		if err != nil {
-			return nil, err
-		}
-
-		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
-		if err != nil {
-			return nil, err
-		}
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode != 201 {
-			var bodyStr string
-			b, err := ioutil.ReadAll(resp.Body)
-			if err == nil {
-				bodyStr = string(b)
-			}
-
-			if len(bodyStr) != 0 {
-				return nil, fmt.Errorf("http response %s: %s", resp.Status, bodyStr)
-			}
-			return nil, fmt.Errorf("http response %s", resp.Status)
-		}
-
-		var triggerResp BuildTriggerResponse
-
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(b, &triggerResp); err != nil {
-			return nil, err
-		}
-
-		log.Printf("Trigger response: %+v", triggerResp)
-
-		if triggerResp.Status != "ok" {
-			return nil, fmt.Errorf("build trigger response (%s) is not 'ok'", triggerResp.Status)
-		}
-
-		startedBuilds = append(startedBuilds, buildKey{
-			triggerResult: triggerResp,
-			key:           k,
-		})
+func triggerWorkflow(triggerToken, appSlug string, key Key) (*buildKey, error) {
+	log.Printf("Starting %s", key.ID)
+	params, err := newBuildTriggerParams(key, triggerToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create buildparams: %s", err)
 	}
-	return startedBuilds, nil
+
+	// TODO investigate issue with several commit messages, then remove
+	params.BuildParams.CommitMessage = ""
+
+	if key.RepoOwner != "" {
+		params.BuildParams.BranchRepoOwner = key.RepoOwner
+		params.BuildParams.BranchDestRepoOwner = key.RepoOwner
+	}
+
+	log.Printf("Params:\n%s", pretty.Object(params))
+
+	url := "https://app.bitrise.io/app/" + appSlug + "/build/start.json"
+
+	data, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 201 {
+		var bodyStr string
+		b, err := ioutil.ReadAll(resp.Body)
+		if err == nil {
+			bodyStr = string(b)
+		}
+
+		if len(bodyStr) != 0 {
+			return nil, fmt.Errorf("http response %s: %s", resp.Status, bodyStr)
+		}
+		return nil, fmt.Errorf("http response %s", resp.Status)
+	}
+
+	var triggerResp BuildTriggerResponse
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &triggerResp); err != nil {
+		return nil, err
+	}
+
+	log.Printf("Trigger response: %+v", triggerResp)
+
+	if triggerResp.Status != "ok" {
+		return nil, fmt.Errorf("build trigger response (%s) is not 'ok'", triggerResp.Status)
+	}
+
+	return &buildKey{
+		triggerResult: triggerResp,
+		key:           key,
+	}, nil
 }
 
-func monitorRunningBuilds(apiToken string, startedBuilds []buildKey, abortOnFailure bool) (map[string]BuildInfo, error) {
+func monitorRunningBuilds(apiToken string, startedBuild buildKey, hangingBuildWarning HangingBuildWarning) (map[string]BuildInfo, error) {
 	var buildInfos = map[string]BuildInfo{}
 	var messages []string
 	var mux sync.Mutex
-	var messageMux sync.Mutex
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	wg.Add(len(startedBuilds))
+	wg.Add(1)
 
 	var buildErr error
 
-	for _, startedBuild := range startedBuilds {
-		appSlug := startedBuild.triggerResult.AppSlug
-		buildSlug := startedBuild.triggerResult.BuildSlug
-		id := startedBuild.key.ID
-		go func() {
-			defer wg.Done()
-			build, err := pollBuild(ctx, apiToken, appSlug, buildSlug, id)
-			if err != nil {
-				buildErr = err
-				cancel()
-				if abortOnFailure {
-					var abortWg sync.WaitGroup
-					abortWg.Add(len(startedBuilds))
-					for _, startedBuild := range startedBuilds {
-						appSlug := startedBuild.triggerResult.AppSlug
-						buildSlug := startedBuild.triggerResult.BuildSlug
-						id := startedBuild.key.ID
-						go func() {
-							defer abortWg.Done()
-							message := abortBuilds(apiToken, appSlug, buildSlug, id)
-							messageMux.Lock()
-							messages = append(messages, message)
-							messageMux.Unlock()
-						}()
-					}
-					abortWg.Wait()
-				}
-			}
-			mux.Lock()
-			buildInfos[id] = build
-			mux.Unlock()
-		}()
-	}
+	appSlug := startedBuild.triggerResult.AppSlug
+	buildSlug := startedBuild.triggerResult.BuildSlug
+	id := startedBuild.key.ID
+	go func() {
+		defer wg.Done()
+		build, err := pollBuild(ctx, apiToken, appSlug, buildSlug, id, hangingBuildWarning)
+		if err != nil {
+			buildErr = err
+			cancel()
+		}
+		mux.Lock()
+		buildInfos[id] = build
+		mux.Unlock()
+	}()
 
 	wg.Wait()
 
@@ -321,7 +297,27 @@ const (
 	StatusUnknown = "unknown"
 )
 
-func pollBuild(ctx context.Context, apiToken string, appSlug string, buildSlug string, id string) (BuildInfo, error) {
+type HangingBuildWarning struct {
+	Timeout    time.Duration
+	WebhookURL string
+	Channel    string
+}
+
+func pollBuild(ctx context.Context, apiToken string, appSlug string, buildSlug string, id string, hangingBuildWarning HangingBuildWarning) (BuildInfo, error) {
+	time.AfterFunc(hangingBuildWarning.Timeout, func() {
+		buildURL := "https://app.bitrise.io/build/" + buildSlug
+		log.Warnf("Potentially hanging build: %s", buildURL)
+		message := Message{
+			Channel:  hangingBuildWarning.Channel,
+			Text:     "Potential hanging build: " + buildURL,
+			Username: "hanging-build-bot",
+		}
+
+		if err := postMessage(message, "", hangingBuildWarning.WebhookURL); err != nil {
+			log.Errorf("Failed to warn about potentially hanging build: %s", err)
+		}
+	})
+
 	for {
 		build, err := GetBuild(apiToken, appSlug, buildSlug)
 		if err != nil {

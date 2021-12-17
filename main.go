@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/bitrise-io/go-steputils/v2/stepconf"
 	"github.com/bitrise-io/go-utils/log"
@@ -19,6 +20,9 @@ type Config struct {
 	StackID         string `env:"stack_id,required"`
 	MachineType     string `env:"machine_type,required"`
 	Workflow        string `env:"workflow,required"`
+	HangTimeoutSec  int    `env:"hang_timeout,required"`
+	HangWebhookURL  string `env:"hang_webhook,required"`
+	HangChannel     string `env:"hang_channel,required"`
 }
 
 func main() {
@@ -40,16 +44,20 @@ func runController() error {
 		"GIT_REPOSITORY_URL": conf.RepositoryURL,
 	}
 
-	keys := []Key{{
+	key := Key{
 		Stack:       conf.StackID,
 		MachineType: conf.MachineType,
 		Workflow:    conf.Workflow,
 		ID:          fmt.Sprintf("%s [%s]", conf.StackID, conf.MachineType),
 		Envs:        envs,
 		RepoOwner:   conf.RepositoryOwner,
-	}}
-
-	if _, err := ExecuteWorkflows(conf.TriggerToken, conf.APIToken, conf.AppSlug, keys, true); err != nil {
+	}
+	hangingBuildWarning := HangingBuildWarning{
+		Timeout:    time.Duration(conf.HangTimeoutSec) * time.Second,
+		WebhookURL: conf.HangWebhookURL,
+		Channel:    conf.HangChannel,
+	}
+	if _, err := ExecuteWorkflows(conf.TriggerToken, conf.APIToken, conf.AppSlug, key, hangingBuildWarning); err != nil {
 		return err
 	}
 
