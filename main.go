@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bitrise-io/go-steputils/v2/stepconf"
@@ -20,6 +21,7 @@ type Config struct {
 	StackID         string `env:"stack_id,required"`
 	MachineType     string `env:"machine_type,required"`
 	Workflow        string `env:"workflow,required"`
+	Envs            string `env:"envs"`
 	HangTimeoutSec  int    `env:"hang_timeout,required"`
 	HangWebhookURL  string `env:"hang_webhook,required"`
 	HangChannel     string `env:"hang_channel,required"`
@@ -42,6 +44,12 @@ func runController() error {
 
 	envs := map[string]string{
 		"GIT_REPOSITORY_URL": conf.RepositoryURL,
+	}
+
+	s := strings.Split(conf.Envs, "\n")
+	for _, e := range s {
+		es := strings.Split(e, "=")
+		envs[es[0]] = es[1]
 	}
 
 	key := Key{

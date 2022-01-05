@@ -49,6 +49,10 @@ inputs:
     title: "Workflow"
     is_required: true
 
+- envs:
+  opts:
+    title: "Envs"
+
 - hang_timeout:
   opts:
     title: "Hang timeout"

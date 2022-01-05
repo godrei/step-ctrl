@@ -15,6 +15,7 @@ workflows:
         - stack_id: osx-xcode-13.2.x
         - machine_type: g2.12core
         - workflow: nesting_level_10
+        - envs: "test=value\nkey=value"
         - hang_timeout: 600
         - hang_webhook: dummy
         - hang_channel: dummy
