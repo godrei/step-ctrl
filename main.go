@@ -48,6 +48,10 @@ func runController() error {
 
 	s := strings.Split(conf.Envs, "\n")
 	for _, e := range s {
+		if strings.TrimSpace(e) == "" {
+			continue
+		}
+
 		es := strings.Split(e, "=")
 		envs[es[0]] = es[1]
 	}
