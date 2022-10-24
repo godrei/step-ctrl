@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -17,7 +16,7 @@ import (
 	"github.com/bitrise-io/go-utils/log"
 	"github.com/bitrise-io/go-utils/pretty"
 	"github.com/bitrise-io/go-utils/v2/env"
-	"github.com/olekukonko/tablewriter"
+	"github.com/fbiville/markdown-table-formatter/pkg/markdown"
 )
 
 // Key ...
@@ -246,14 +245,14 @@ func printBuildInfos(buildInfos map[string]BuildInfo) {
 	}
 
 	fmt.Println()
-	
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"ID", "DURATION", "URL", "STATUS"})
-	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-	table.SetCenterSeparator("|")
-	table.AppendBulk(data) // Add Bulk Data
-	table.Render()
 
+	basicTable, err := markdown.NewTableFormatterBuilder().
+		Build("ID", "DURATION", "URL", "STATUS").
+		Format(data)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Print(basicTable)
 	fmt.Println()
 }
 
