@@ -104,7 +104,16 @@ func ExecuteWorkflows(triggerToken string, apiToken string, appSlug string, keys
 	for _, startedBuild := range startedBuilds {
 		buildInfo, err := monitorRunningBuild(apiToken, startedBuild)
 		if err != nil {
-			return nil, err
+			log.Warnf("Build (%s) has failed: %s, retrying...", buildInfo.URL, err)
+			startedBuild, err := triggerWorkflows(triggerToken, appSlug, startedBuild.key)
+			if err != nil {
+				return nil, err
+			}
+
+			buildInfo, err = monitorRunningBuild(apiToken, *startedBuild)
+			if err != nil {
+				log.Warnf("Retry build (%s) has failed: %s", buildInfo.URL, err)
+			}
 		}
 
 		buildInfos[startedBuild.key.ID] = buildInfo
@@ -173,6 +182,10 @@ func triggerWorkflows(triggerToken, appSlug string, key Key) (*buildKey, error) 
 	}
 
 	log.Printf("Trigger response: %+v", triggerResp)
+	if triggerResp.Status == "ok" {
+		log.Printf("Build url: https://app.bitrise.io/build/%s", triggerResp.BuildSlug)
+	}
+	fmt.Println()
 
 	if triggerResp.Status != "ok" {
 		return nil, fmt.Errorf("build trigger response (%s) is not 'ok'", triggerResp.Status)

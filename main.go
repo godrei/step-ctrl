@@ -27,6 +27,37 @@ func main() {
 	}
 }
 
+func runController() error {
+	var conf Config
+	parser := stepconf.NewInputParser(env.NewRepository())
+	if err := parser.Parse(&conf); err != nil {
+		return err
+	}
+	stepconf.Print(conf)
+
+	envMatrix, err := parseEnvMatrix(conf.EnvMatrix)
+	if err != nil {
+		return err
+	}
+
+	var keys []Key
+	for _, envs := range envMatrix {
+		keys = append(keys, Key{
+			Stack:       conf.StackID,
+			MachineType: conf.MachineType,
+			Workflow:    conf.Workflow,
+			ID:          calculateBuildID(conf.StackID, conf.MachineType, envs),
+			Envs:        envs,
+		})
+	}
+
+	if _, err := ExecuteWorkflows(conf.TriggerToken, conf.APIToken, conf.AppSlug, keys); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func parseEnvMatrix(matrixStr string) ([]map[string]string, error) {
 	var matrix []map[string]string
 
@@ -56,33 +87,11 @@ func parseEnvMatrix(matrixStr string) ([]map[string]string, error) {
 	return matrix, nil
 }
 
-func runController() error {
-	var conf Config
-	parser := stepconf.NewInputParser(env.NewRepository())
-	if err := parser.Parse(&conf); err != nil {
-		return err
+func calculateBuildID(stackID, machineType string, envs map[string]string) string {
+	var keyValues []string
+	for key, value := range envs {
+		keyValues = append(keyValues, key+"="+value)
 	}
-	stepconf.Print(conf)
-
-	envMatrix, err := parseEnvMatrix(conf.EnvMatrix)
-	if err != nil {
-		return err
-	}
-
-	var keys []Key
-	for _, envs := range envMatrix {
-		keys = append(keys, Key{
-			Stack:       conf.StackID,
-			MachineType: conf.MachineType,
-			Workflow:    conf.Workflow,
-			ID:          fmt.Sprintf("%s [%s]", conf.StackID, conf.MachineType),
-			Envs:        envs,
-		})
-	}
-
-	if _, err := ExecuteWorkflows(conf.TriggerToken, conf.APIToken, conf.AppSlug, keys); err != nil {
-		return err
-	}
-
-	return nil
+	keyValuesStr := strings.Join(keyValues, ",")
+	return fmt.Sprintf("%s [%s] - %s", stackID, machineType, keyValuesStr)
 }
