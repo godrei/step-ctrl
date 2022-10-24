@@ -1,6 +1,3 @@
-# github.com/alexeyco/simpletable v1.0.0
-## explicit; go 1.16
-github.com/alexeyco/simpletable
 # github.com/bitrise-io/go-steputils/v2 v2.0.0-alpha.1
 ## explicit; go 1.16
 github.com/bitrise-io/go-steputils/v2/stepconf
@@ -17,6 +14,9 @@ github.com/bitrise-io/go-utils/v2/env
 # github.com/mattn/go-runewidth v0.0.12
 ## explicit; go 1.9
 github.com/mattn/go-runewidth
+# github.com/olekukonko/tablewriter v0.0.5
+## explicit; go 1.12
+github.com/olekukonko/tablewriter
 # github.com/rivo/uniseg v0.1.0
 ## explicit; go 1.12
 github.com/rivo/uniseg

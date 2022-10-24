@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/alexeyco/simpletable"
 	"github.com/bitrise-io/go-steputils/v2/stepconf"
 	"github.com/bitrise-io/go-utils/colorstring"
 	"github.com/bitrise-io/go-utils/log"
 	"github.com/bitrise-io/go-utils/pretty"
 	"github.com/bitrise-io/go-utils/v2/env"
+	"github.com/olekukonko/tablewriter"
 )
 
 // Key ...
@@ -239,28 +240,20 @@ type BuildInfo struct {
 }
 
 func printBuildInfos(buildInfos map[string]BuildInfo) {
-	table := simpletable.New()
-
-	table.Header = &simpletable.Header{
-		Cells: []*simpletable.Cell{
-			{Align: simpletable.AlignCenter, Text: "ID"},
-			{Align: simpletable.AlignCenter, Text: "DURATION"},
-			{Align: simpletable.AlignCenter, Text: "URL"},
-			{Align: simpletable.AlignCenter, Text: "STATUS"},
-		},
-	}
+	var data [][]string
 	for _, buildInfo := range buildInfos {
-		r := []*simpletable.Cell{
-			{Text: buildInfo.ID},
-			{Text: buildInfo.Duration},
-			{Text: buildInfo.URL},
-			{Align: simpletable.AlignRight, Text: buildInfo.Status},
-		}
-
-		table.Body.Cells = append(table.Body.Cells, r)
+		data = append(data, []string{buildInfo.ID, buildInfo.Duration, buildInfo.URL, buildInfo.Status})
 	}
-	table.SetStyle(simpletable.StyleUnicode)
-	fmt.Println(table.String())
+
+	fmt.Println()
+	
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"ID", "DURATION", "URL", "STATUS"})
+	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	table.SetCenterSeparator("|")
+	table.AppendBulk(data) // Add Bulk Data
+	table.Render()
+
 	fmt.Println()
 }
 
