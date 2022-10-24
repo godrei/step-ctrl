@@ -10,12 +10,14 @@ workflows:
         - trigger_token: dummy
         - api_token: dummy
         - app_slug: dummy
-        - repository_url: https://github.com/godrei/styrax-compose.git
-        - repository_owner: godrei
         - stack_id: osx-xcode-13.2.x
         - machine_type: g2.12core
         - workflow: nesting_level_10
-        - envs: "test=value\nkey=value"
-        - hang_timeout: 600
-        - hang_webhook: dummy
-        - hang_channel: dummy
+        - env_matrix: |-
+            API=24,ABI=x86,TAG=google_apis_playstore
+            API=25,ABI=x86,TAG=google_apis_playstore
+            API=26,ABI=x86,TAG=google_apis_playstore
+            API=27,ABI=x86,TAG=google_apis_playstore
+            API=28,ABI=x86,TAG=google_apis_playstore
+            API=29,ABI=x86,TAG=google_apis_playstore
+            API=30,ABI=x86,TAG=google_apis_playstore

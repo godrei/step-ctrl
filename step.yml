@@ -9,16 +9,6 @@ toolkit:
     package_name: github.com/godrei/step-ctrl
 
 inputs:
-- repository_url:
-  opts:
-    title: "Repository URL"
-    is_required: true
-
-- repository_owner:
-  opts:
-    title: "Repository Owner"
-    is_required: true
-
 - trigger_token:
   opts:
     title: "trigger token"
@@ -49,22 +39,7 @@ inputs:
     title: "Workflow"
     is_required: true
 
-- envs:
+- env_matrix:
   opts:
     title: "Envs"
-
-- hang_timeout:
-  opts:
-    title: "Hang timeout"
-    is_required: true
-
-- hang_webhook:
-  opts:
-    title: "Hang webhook"
-    is_required: true
-
-- hang_channel:
-  opts:
-    title: "Hang channel"
-    is_required: true
 

@@ -2,29 +2,22 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"strings"
-	"time"
-
 	"github.com/bitrise-io/go-steputils/v2/stepconf"
 	"github.com/bitrise-io/go-utils/log"
 	"github.com/bitrise-io/go-utils/v2/env"
+	"os"
+	"strings"
 )
 
 // Config ...
 type Config struct {
-	RepositoryURL   string `env:"repository_url,required"`
-	RepositoryOwner string `env:"repository_owner,required"`
-	TriggerToken    string `env:"trigger_token,required"`
-	APIToken        string `env:"api_token,required"`
-	AppSlug         string `env:"app_slug,required"`
-	StackID         string `env:"stack_id,required"`
-	MachineType     string `env:"machine_type,required"`
-	Workflow        string `env:"workflow,required"`
-	Envs            string `env:"envs"`
-	HangTimeoutSec  int    `env:"hang_timeout,required"`
-	HangWebhookURL  string `env:"hang_webhook,required"`
-	HangChannel     string `env:"hang_channel,required"`
+	TriggerToken string `env:"trigger_token,required"`
+	APIToken     string `env:"api_token,required"`
+	AppSlug      string `env:"app_slug,required"`
+	StackID      string `env:"stack_id,required"`
+	MachineType  string `env:"machine_type,required"`
+	Workflow     string `env:"workflow,required"`
+	EnvMatrix    string `env:"env_matrix"`
 }
 
 func main() {
@@ -32,6 +25,35 @@ func main() {
 		log.Errorf("%s", err)
 		os.Exit(1)
 	}
+}
+
+func parseEnvMatrix(matrixStr string) ([]map[string]string, error) {
+	var matrix []map[string]string
+
+	split := strings.Split(matrixStr, "\n")
+	for _, line := range split {
+		if line == "" {
+			continue
+		}
+
+		envs := map[string]string{}
+
+		fields := strings.Split(line, ",")
+		for _, field := range fields {
+			fieldSplit := strings.Split(field, "=")
+			if len(fieldSplit) != 2 {
+				return nil, fmt.Errorf("invalid env matrix field: %s", field)
+			}
+			key := fieldSplit[0]
+			value := fieldSplit[1]
+
+			envs[key] = value
+		}
+
+		matrix = append(matrix, envs)
+	}
+
+	return matrix, nil
 }
 
 func runController() error {
@@ -42,34 +64,23 @@ func runController() error {
 	}
 	stepconf.Print(conf)
 
-	envs := map[string]string{
-		"GIT_REPOSITORY_URL": conf.RepositoryURL,
+	envMatrix, err := parseEnvMatrix(conf.EnvMatrix)
+	if err != nil {
+		return err
 	}
 
-	s := strings.Split(conf.Envs, "\n")
-	for _, e := range s {
-		if strings.TrimSpace(e) == "" {
-			continue
-		}
-
-		es := strings.Split(e, "=")
-		envs[es[0]] = es[1]
+	var keys []Key
+	for _, envs := range envMatrix {
+		keys = append(keys, Key{
+			Stack:       conf.StackID,
+			MachineType: conf.MachineType,
+			Workflow:    conf.Workflow,
+			ID:          fmt.Sprintf("%s [%s]", conf.StackID, conf.MachineType),
+			Envs:        envs,
+		})
 	}
 
-	key := Key{
-		Stack:       conf.StackID,
-		MachineType: conf.MachineType,
-		Workflow:    conf.Workflow,
-		ID:          fmt.Sprintf("%s [%s]", conf.StackID, conf.MachineType),
-		Envs:        envs,
-		RepoOwner:   conf.RepositoryOwner,
-	}
-	hangingBuildWarning := HangingBuildWarning{
-		Timeout:    time.Duration(conf.HangTimeoutSec) * time.Second,
-		WebhookURL: conf.HangWebhookURL,
-		Channel:    conf.HangChannel,
-	}
-	if _, err := ExecuteWorkflows(conf.TriggerToken, conf.APIToken, conf.AppSlug, key, hangingBuildWarning); err != nil {
+	if _, err := ExecuteWorkflows(conf.TriggerToken, conf.APIToken, conf.AppSlug, keys); err != nil {
 		return err
 	}
 

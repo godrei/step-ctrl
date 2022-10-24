@@ -83,25 +83,39 @@ type BuildParamsEnvironment struct {
 }
 
 // ExecuteWorkflows ...
-func ExecuteWorkflows(triggerToken string, apiToken string, appSlug string, keys Key, hangingBuildWarning HangingBuildWarning) (map[string]BuildInfo, error) {
+func ExecuteWorkflows(triggerToken string, apiToken string, appSlug string, keys []Key) (map[string]BuildInfo, error) {
 	fmt.Println()
 	log.Infof("Trigger Workflows")
 
-	startedBuild, err := triggerWorkflow(triggerToken, appSlug, keys)
-	if err != nil {
-		return nil, err
+	var startedBuilds []buildKey
+	for _, key := range keys {
+		startedBuild, err := triggerWorkflows(triggerToken, appSlug, key)
+		if err != nil {
+			return nil, err
+		}
+
+		startedBuilds = append(startedBuilds, *startedBuild)
 	}
 
 	fmt.Println()
 	log.Infof("Monitoring Workflows")
 
-	buildInfos, err := monitorRunningBuilds(apiToken, *startedBuild, hangingBuildWarning)
+	buildInfos := map[string]BuildInfo{}
+	for _, startedBuild := range startedBuilds {
+		buildInfo, err := monitorRunningBuild(apiToken, startedBuild)
+		if err != nil {
+			return nil, err
+		}
+
+		buildInfos[startedBuild.key.ID] = buildInfo
+	}
+
 	printBuildInfos(buildInfos)
 
-	return buildInfos, err
+	return buildInfos, nil
 }
 
-func triggerWorkflow(triggerToken, appSlug string, key Key) (*buildKey, error) {
+func triggerWorkflows(triggerToken, appSlug string, key Key) (*buildKey, error) {
 	log.Printf("Starting %s", key.ID)
 	params, err := newBuildTriggerParams(key, triggerToken)
 	if err != nil {
@@ -170,9 +184,8 @@ func triggerWorkflow(triggerToken, appSlug string, key Key) (*buildKey, error) {
 	}, nil
 }
 
-func monitorRunningBuilds(apiToken string, startedBuild buildKey, hangingBuildWarning HangingBuildWarning) (map[string]BuildInfo, error) {
-	var buildInfos = map[string]BuildInfo{}
-	var messages []string
+func monitorRunningBuild(apiToken string, startedBuild buildKey) (BuildInfo, error) {
+	var buildInfo BuildInfo
 	var mux sync.Mutex
 
 	var wg sync.WaitGroup
@@ -188,30 +201,19 @@ func monitorRunningBuilds(apiToken string, startedBuild buildKey, hangingBuildWa
 	id := startedBuild.key.ID
 	go func() {
 		defer wg.Done()
-		build, err := pollBuild(ctx, apiToken, appSlug, buildSlug, id, hangingBuildWarning)
+		build, err := pollBuild(ctx, apiToken, appSlug, buildSlug, id)
 		if err != nil {
 			buildErr = err
 			cancel()
 		}
 		mux.Lock()
-		buildInfos[id] = build
+		buildInfo = build
 		mux.Unlock()
 	}()
 
 	wg.Wait()
 
-	fmt.Println()
-	fmt.Println()
-
-	if len(messages) > 0 {
-		for _, message := range messages {
-			log.Warnf(message)
-		}
-
-		fmt.Println()
-	}
-
-	return buildInfos, buildErr
+	return buildInfo, buildErr
 }
 
 // BuildInfo ...
@@ -303,21 +305,7 @@ type HangingBuildWarning struct {
 	Channel    string
 }
 
-func pollBuild(ctx context.Context, apiToken string, appSlug string, buildSlug string, id string, hangingBuildWarning HangingBuildWarning) (BuildInfo, error) {
-	time.AfterFunc(hangingBuildWarning.Timeout, func() {
-		buildURL := "https://app.bitrise.io/build/" + buildSlug
-		log.Warnf("Potentially hanging build: %s", buildURL)
-		message := Message{
-			Channel:  hangingBuildWarning.Channel,
-			Text:     "Potential hanging build: " + buildURL,
-			Username: "hanging-build-bot",
-		}
-
-		if err := postMessage(message, "", hangingBuildWarning.WebhookURL); err != nil {
-			log.Errorf("Failed to warn about potentially hanging build: %s", err)
-		}
-	})
-
+func pollBuild(ctx context.Context, apiToken string, appSlug string, buildSlug string, id string) (BuildInfo, error) {
 	for {
 		build, err := GetBuild(apiToken, appSlug, buildSlug)
 		if err != nil {
