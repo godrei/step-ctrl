@@ -6,6 +6,7 @@ import (
 	"github.com/bitrise-io/go-utils/log"
 	"github.com/bitrise-io/go-utils/v2/env"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -92,6 +93,7 @@ func calculateBuildID(stackID, machineType string, envs map[string]string) strin
 	for key, value := range envs {
 		keyValues = append(keyValues, key+"="+value)
 	}
+	sort.Strings(keyValues)
 	keyValuesStr := strings.Join(keyValues, ",")
 	return fmt.Sprintf("%s [%s] - %s", stackID, machineType, keyValuesStr)
 }
